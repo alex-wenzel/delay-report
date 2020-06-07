@@ -13,3 +13,4 @@ class StopTimes(GTFSFile):
         GTFSFile.__init__(self, file_path)
         #st_df["departure_time"] = st_df["departure_time"].apply(get_unix_time)
         self.data["departure_time"] = self.data["departure_time"].apply(Utils.get_unix_time)
+        self.data["arrival_time"] = self.data["arrival_time"].apply(Utils.get_unix_time)
