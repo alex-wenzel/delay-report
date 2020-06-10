@@ -69,6 +69,8 @@ def check_delays_missing(gtfs, feed, curr_trips, delay_thresh = 10):
     for trip_id in curr_trips:
         try:
             feed_record = feed.loc[trip_id,:]
+            #if type(feed_record) == pd.DataFrame:
+            #    print(feed_record)
         except KeyError:
             missing.append(trip_id)
             continue
@@ -80,8 +82,8 @@ def check_delays_missing(gtfs, feed, curr_trips, delay_thresh = 10):
         try:
             real_depart = float(feed_record["ns_depart"])
         except TypeError:
-            print(feed_record["ns_depart"])
-            print("103 type error")
+            #print(feed_record["ns_depart"])
+            #print("103 type error")
             continue
 
         ## Get departure time for next stop from gtfs
@@ -91,8 +93,8 @@ def check_delays_missing(gtfs, feed, curr_trips, delay_thresh = 10):
         try:
             sched_stop_depart = float(stops[stops["stop_id"]==feed_record["ns_id"]]["departure_time"])
         except TypeError:
-            print(stops[stops["stop_id"]==feed_record["ns_id"]]["departure_time"])
-            print("103 type error")
+            #print(stops[stops["stop_id"]==feed_record["ns_id"]]["departure_time"])
+            #print("103 type error")
             continue
         #print(sched_stop_depart)
 
@@ -146,7 +148,9 @@ def reporter(conf_path):
         live = OBA.parse_trip_updates(feed)
 
         ## Check for new delays
-        delayed_trips = check_delays_missing(gtfs, live, curr_trips, delay_thresh = 3)
+        delayed_trips = check_delays_missing(gtfs, live, curr_trips, delay_thresh = 5)
+
+        delayed_trips = sorted(delayed_trips, key = lambda x: int(x["rte_id"]))
 
         if len(delayed_trips) > 0:
             for trip in delayed_trips:
@@ -156,12 +160,15 @@ def reporter(conf_path):
                 #text = f"[{NOW.strftime("%H:%M")}] Route {trip["rte_id"]} "
                 #text += f"expected at {trip["stop_name"]} is {trip["delay"]} minute(s) late"
 
-                text = "[" + NOW.strftime("%I:%M %p") + "] " + "Route " + trip["rte_id"]
+                text = "[" + NOW.strftime("%I:%M %p") + "] " + trip["rte_id"] + "|"
+                text += str(trip["delay"]) +" min : "
+                text += "Route " + trip["rte_id"]
                 text += " to " + trip["headsign"]
                 text += " expected at " + trip["stop_name"] + " (" + str(trip["ns_id"]) + ")"
                 text += " is delayed " + str(trip["delay"]) + " minutes"
                 text += " (vehicle " + str(trip["veh_id"]) + ")"
                 print(text+'\n')
+            print("")
         else:
             print("[" + NOW.strftime("%I:%M %p") + "] No delayed routes\n")
 
@@ -178,4 +185,8 @@ def reporter(conf_path):
         ## Sleep one minute
 
 if __name__ == "__main__":
-    reporter(sys.argv[1])
+    print("\nGood morning! Beginning monitoring loop now...\n")
+    try:
+        reporter(sys.argv[1])
+    except KeyboardInterrupt:
+        print("\nGood night!")
