@@ -46,6 +46,8 @@ def get_current_trips(gtfs):
         "70504-1111100-0", "70488-1111100-0", "70849-1111100-0"
     ]
     #t_df = t_df[t_df["service_id"].isin(svc_ids)]
+    t_df = t_df[t_df["service_id"].str.contains("1111100")]
+    t_df = t_df[~t_df["route_id"].isin(["510", "520", "530"])]
 
     t_df = pd.merge(t_df, st_df, on = 'trip_id')
 
@@ -72,7 +74,7 @@ def check_delays_missing(gtfs, feed, curr_trips, delay_thresh = 10):
             #if type(feed_record) == pd.DataFrame:
             #    print(feed_record)
         except KeyError:
-            missing.append(trip_id)
+            missing.append(gtfs.trips.data.loc[trip_id,:])
             continue
 
         ## Get next stop from feed
@@ -109,7 +111,7 @@ def check_delays_missing(gtfs, feed, curr_trips, delay_thresh = 10):
             feed_record["delay"] = delay/60.0
             delayed.append(feed_record)
 
-    return delayed
+    return delayed, missing
 
 def reporter(conf_path):
     """
@@ -148,9 +150,10 @@ def reporter(conf_path):
         live = OBA.parse_trip_updates(feed)
 
         ## Check for new delays
-        delayed_trips = check_delays_missing(gtfs, live, curr_trips, delay_thresh = 5)
+        delayed_trips, missing = check_delays_missing(gtfs, live, curr_trips, delay_thresh = 5)
 
         delayed_trips = sorted(delayed_trips, key = lambda x: int(x["rte_id"]))
+        missing = sorted(missing, key = lambda x: int(x["route_id"]))
 
         if len(delayed_trips) > 0:
             for trip in delayed_trips:
@@ -171,6 +174,13 @@ def reporter(conf_path):
             print("")
         else:
             print("[" + NOW.strftime("%I:%M %p") + "] No delayed routes\n")
+
+        if len(missing) > 0:
+            print("MISSING TRIPS:")
+            for trip in missing:
+                print('\t'+str(trip["route_id"])+" to "+trip["trip_headsign"]+" ("+trip.name+")")
+        print("=================\n")
+
 
         STOP = datetime.datetime.now()
         runtime = STOP - NOW
