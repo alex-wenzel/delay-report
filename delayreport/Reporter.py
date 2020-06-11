@@ -61,7 +61,7 @@ def get_current_trips(gtfs):
 
     return active_ids
 
-def check_delays_missing(gtfs, feed, curr_trips, delay_thresh = 10):
+def check_delays_missing(gtfs, feed, curr_trips, now, delay_thresh = 10):
     """
     This function checks the GTFS for expected trips and
     """
@@ -74,7 +74,13 @@ def check_delays_missing(gtfs, feed, curr_trips, delay_thresh = 10):
             #if type(feed_record) == pd.DataFrame:
             #    print(feed_record)
         except KeyError:
-            missing.append(gtfs.trips.data.loc[trip_id,:])
+            s_df = gtfs.stop_times.data
+            trip_stops = copy.deepcopy(s_df[s_df["trip_id"]==trip_id])
+            #trip_stops["departure_unix_time"] = trip_stops["departure_time"].apply(Utils.get_unix_time)
+            trip_stops["time_from_now"] = trip_stops["departure_time"].apply(lambda x: abs(x - now))
+            closest_stop = trip_stops[trip_stops["time_from_now"]==trip_stops["time_from_now"].min()]
+            if closest_stop.iloc[0,:]["stop_sequence"] != "1" and closest_stop.iloc[0,:]["stop_is_last"] == "0":
+                missing.append([gtfs.trips.data.loc[trip_id,:], closest_stop.iloc[0,:]])
             continue
 
         ## Get next stop from feed
@@ -150,10 +156,12 @@ def reporter(conf_path):
         live = OBA.parse_trip_updates(feed)
 
         ## Check for new delays
-        delayed_trips, missing = check_delays_missing(gtfs, live, curr_trips, delay_thresh = 5)
+        delayed_trips, missing = check_delays_missing(gtfs, live, curr_trips,
+                                                        datetime.datetime.timestamp(NOW),
+                                                        delay_thresh = 5)
 
         delayed_trips = sorted(delayed_trips, key = lambda x: int(x["rte_id"]))
-        missing = sorted(missing, key = lambda x: int(x["route_id"]))
+        missing = sorted(missing, key = lambda x: int(x[0]["route_id"]))
 
         if len(delayed_trips) > 0:
             for trip in delayed_trips:
@@ -177,8 +185,12 @@ def reporter(conf_path):
 
         if len(missing) > 0:
             print("MISSING TRIPS:")
-            for trip in missing:
-                print('\t'+str(trip["route_id"])+" to "+trip["trip_headsign"]+" ("+trip.name+")")
+            for pair in missing:
+                trip, stop = pair
+                stop_name = gtfs.stops.data.loc[stop["stop_id"],:]["stop_name"]
+                text = '\t'+str(trip["route_id"])+" to "+trip["trip_headsign"]
+                text += " expected at "+ stop_name + " ("+stop["stop_id"]+")"
+                print(text)
         print("=================\n")
 
 
